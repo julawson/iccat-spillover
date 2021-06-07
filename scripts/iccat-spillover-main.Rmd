@@ -152,6 +152,9 @@ coef_tab <- tac_reg2c$coeftable
 #note: this isn't strictly right, because we probably want the dosage based on the pre-treatment period only
 
 ```
+
+
+
 ```{r old code}
 
 # mb: leaving some old code that is probably wrong  
