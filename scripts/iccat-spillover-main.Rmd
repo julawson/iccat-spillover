@@ -16,6 +16,8 @@ library(ggpubr)
 library(kableExtra)
 library(reshape2)
 library(fixest)
+library(broom)
+library(haven)
 here()
 
 #Cleaning data
@@ -86,18 +88,65 @@ iccat_2019 <- iccat_df %>%
   distinct(ScieName)
 incommon <- inner_join(iccat_2019, iccat_1970)
 
+#There has been an increase in fleets (FleetGear) over time. 196 FleetGear in 2019, 41 in 1970.
+iccat_fg_1970 <- iccat_df %>% 
+  filter(YearC == 1970) %>% 
+  ungroup() %>% 
+  distinct(FleetGear)
+iccat_fg_2019 <- iccat_df %>% 
+  filter(YearC == 2019) %>% 
+  ungroup() %>% 
+  distinct(FleetGear)
+incommon_fg <- inner_join(iccat_fg_2019, iccat_fg_1970)
+
 #There are 63 stock groups that have been added between 1970 and 2019. I am removing them so that the numbers are not inflated as new stocks are reported over time. Only stocks that are "in common" in 1970 and 2019 will be retained. 
+#There has been an increase in fleets over time. I am only including fleets that have remained part of ICCAT from 1970 to 2019.
 
 iccat_df_final <- left_join(incommon, iccat_df, by="ScieName") %>% 
-  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE)
+  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
+  left_join(incommon_fg, by="FleetGear")
+
+#isolating just the fleets that span from 1970 to 2019
+filter <- iccat_df_final_edit %>% 
+  select(YearC, FleetGear,SpeciesStock) %>% 
+  distinct(YearC, FleetGear) %>% 
+  count(FleetGear) %>% 
+  filter(n==50) %>% 
+  select(FleetGear)
 
 #Creating a tac_any column, which shows in a given fleet year (grouped by FleetGear and YearC) if there are any stocks that are catch regulated (1 if at least one TAC-regulated stock is in the catch, 0 if none)
 iccat_df_final_edit <- iccat_df_final %>%
   group_by(YearC, FleetGear) %>% 
-  mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0))
+  mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>% 
+  group_by(YearC, FleetGear) %>% 
+  mutate(totalFleetCatch = sum(Qty_t)) %>%
+  mutate(propStock = Qty_t/totalFleetCatch) %>% 
+  group_by(FleetGear, SpeciesStock) %>% 
+  mutate(diff=propStock-lag(propStock,k=1)) %>% 
+  group_by(FleetGear) %>% 
+  filter(YearC >= 1970 & YearC <= 2019) %>% 
+  right_join(filter, by="FleetGear")
 
 ```
 
+```{r analaysis by stock}
+#Question. Does the proportion of the catch of stocks that never receive a TAC increase or decrease relative to the catch of stocks that eventually recieve a TAC?
+#Answer. There is no difference between the proportion of the catch of stocks that never receive a TAC and those that eventually receive one.
+
+stockreg <- feols(propStock ~ tacever | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
+stockreg_coef_tab <- stockreg$coeftable
+
+```
+
+
+```{r analaysis by fleet}
+#Question. Does the proportion of the catch of non-TAC stocks in fleets that are catching one or more TAC stock increase or decrease relative to the catch of non-TAC stocks in fleets that do not catch any TAC stocks?
+#Answer. The treatment (being a fleet that catches one or more TAC stock) catch of non-TAC stocks in fleets that are catching one or more TAC stock increase 
+
+fleetreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
+fleetreg_coef_tab <- fleetreg$coeftable
+
+```
 
 ```{r analysis}
 
