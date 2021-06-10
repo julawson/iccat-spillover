@@ -1,0 +1,75 @@
+---
+title: "ram-database-main"
+author: "Julia Lawson, UCSB"
+date: "6/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(gsynth)
+library(here)
+library(panelView)
+library(magrittr)
+library(kableExtra)
+library(modelsummary)
+library(knitr)
+here()
+
+ram.dbase <- read.csv(here("data", "ram_dbase.csv"),
+                  stringsAsFactors = F)
+
+ram.analysis_df <- ram.dbase %>%
+  filter(stockid != "SKJEPAC") %>%
+  filter(year >= 1950, year <= 2012) %>%
+  mutate(yearTACimp = case_when(
+    stockid == "ATBTUNAWATL" ~ 1982,
+    stockid == "SWORDNATL" ~ 1997,
+    stockid == "SWORDSATL" ~ 1998,
+    stockid == "ALBASATL" ~ 1998,
+    stockid == "ATBTUNAEATL" ~ 1999,
+    stockid == "SBT" ~ 2006,
+    stockid == "BIGEYEATL" ~ 2005,
+    stockid == "ALBANATL" ~ 2001)) %>%
+    mutate(yearTACimp = ifelse(is.na(yearTACimp), 
+                                   Inf, yearTACimp),
+           tacr = 1 * (year >= yearTACimp)) %>% 
+  drop_na(UdivUmsypref)
+
+```
+
+```{r synth control}
+
+# Overview of Data
+panelView(UdivUmsypref ~ tac_year, data=ram.analysis_df, index=c("stockid","year"), pre.post=TRUE)
+panelView(UdivUmsypref ~ tac_year, data=ram.analysis_df, index=c("stockid","year"), type = "outcome") 
+
+##Matrix completion (mc)
+#Original paper on matrix completion (see Athey 2020 https://arxiv.org/pdf/1710.10251.pdf)
+#The min.T0 is the minimum number of pre-treatment time periods for a given treated unit. 
+#ATBTUNAWATL has the smallest number of pre-treatment time periods of 8, so we set min.T0 
+#to 8 to include ATBTUNAWATL in our sample.
+out.mc <- gsynth(UdivUmsypref ~ tac_year, min.T0 = 8,
+                 data = ram.analysis_df, index=c("stockid","year"), estimator = "mc", 
+                 se = TRUE, nboots = 1000, seed = 02139)
+
+plot(out.mc, type = "missing")
+plot(out.mc, main = "Estimated ATT")
+
+ggsave(plot = last_plot(), filename = here("visuals/synth_raw.png"), width = 6, height = 4)
+
+#Blocked assignment outlined in Xu (2017). Described by Athey (2020) as a subset of units 
+#that is treated from a common period onward, so that complete data methods for estimating 
+#the factors and factor loadings can be exploited. This approach is not efficient, nor 
+#computationally attractive, in settings with more complex missing data patterns.
+out <- gsynth(UdivUmsypref ~ tac_year,
+              data = ram.analysis_df, index=c("stockid","year"), 
+              se = TRUE, inference = "parametric", r = c(0, 5), CV = TRUE, 
+              force = "two-way", parallel = TRUE, min.T0 = 8, nboots = 1000, seed = 02139)
+
+#plot(out, type = "missing")
+plot(out, main = "Estimated ATT")
+
+```
