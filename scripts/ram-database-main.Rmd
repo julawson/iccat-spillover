@@ -36,7 +36,8 @@ ram.analysis_df <- ram.dbase %>%
     mutate(yearTACimp = ifelse(is.na(yearTACimp), 
                                    Inf, yearTACimp),
            tacr = 1 * (year >= yearTACimp)) %>% 
-  drop_na(UdivUmsypref)
+  select(-TCbest, -TBmsy, -TBbest) %>% 
+  na.omit(UdivUmsypref, BdivBmsypref)
 
 ```
 
@@ -51,25 +52,26 @@ panelView(UdivUmsypref ~ tac_year, data=ram.analysis_df, index=c("stockid","year
 #The min.T0 is the minimum number of pre-treatment time periods for a given treated unit. 
 #ATBTUNAWATL has the smallest number of pre-treatment time periods of 8, so we set min.T0 
 #to 8 to include ATBTUNAWATL in our sample.
-out.mc <- gsynth(UdivUmsypref ~ tac_year, min.T0 = 8,
+out.mc <- gsynth(UdivUmsypref ~ tac_year + BdivBmsypref, min.T0 = 8,
                  data = ram.analysis_df, index=c("stockid","year"), estimator = "mc", 
                  se = TRUE, nboots = 1000, seed = 02139)
 
-plot(out.mc, type = "missing")
 plot(out.mc, main = "Estimated ATT")
 
-ggsave(plot = last_plot(), filename = here("visuals/synth_raw.png"), width = 6, height = 4)
+#ggsave(plot = last_plot(), filename = here("visuals/synth_raw.png"), width = 6, height = 4)
 
 #Blocked assignment outlined in Xu (2017). Described by Athey (2020) as a subset of units 
 #that is treated from a common period onward, so that complete data methods for estimating 
 #the factors and factor loadings can be exploited. This approach is not efficient, nor 
 #computationally attractive, in settings with more complex missing data patterns.
-out <- gsynth(UdivUmsypref ~ tac_year,
+out <- gsynth(UdivUmsypref ~ tac_year + BdivBmsypref,
               data = ram.analysis_df, index=c("stockid","year"), 
               se = TRUE, inference = "parametric", r = c(0, 5), CV = TRUE, 
               force = "two-way", parallel = TRUE, min.T0 = 8, nboots = 1000, seed = 02139)
 
 #plot(out, type = "missing")
 plot(out, main = "Estimated ATT")
+
+#ggsave(plot = last_plot(), filename = here("visuals/synth_raw2.png"), width = 6, height = 4)
 
 ```
