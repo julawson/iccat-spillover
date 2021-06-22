@@ -1,0 +1,65 @@
+---
+title: "iccat-spillover-summary"
+author: "Julia Lawson, UCSB"
+date: "6/15/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+library(here)
+library(tidyverse)
+library(stargazer)
+
+iccat_df_final_edit <- read.csv(here("data", "iccat_df_edited.csv"),
+                  stringsAsFactors = F)
+
+```
+
+
+```{r summary tables}
+#Comparing average prices pre and post-TAC implementation
+
+iccat_df_final_summ1 <- iccat_df_final_edit %>% 
+  group_by(Species) %>% 
+  filter(YearC < 1997) %>% 
+  summarize(SSaverageUSD = mean(avUSDperkilo)) %>% 
+  add_column(Era = "Pre")
+
+iccat_df_final_summ2 <- iccat_df_final_edit %>% 
+  group_by(Species) %>% 
+  filter(YearC >= 1997) %>% 
+  summarize(SSaverageUSD = mean(avUSDperkilo)) %>% 
+  add_column(Era = "Post")
+
+#Comparing average total volumes landed pre and post-TAC implementation
+
+iccat_df_final_summ3 <- iccat_df_final_edit %>% 
+  filter(YearC < 1997) %>% 
+  group_by(Species, YearC) %>% 
+  summarize(sumQty = sum(Qty_t)) %>% 
+  group_by(Species) %>% 
+  summarize(SSaverageQty = mean(sumQty)) %>% 
+  add_column(Era = "Pre")
+
+iccat_df_final_summ4 <- iccat_df_final_edit %>% 
+  filter(YearC >= 1997) %>% 
+  group_by(Species, YearC) %>% 
+  summarize(sumQty = sum(Qty_t)) %>% 
+  group_by(Species) %>% 
+  summarize(SSaverageQty = mean(sumQty)) %>% 
+  add_column(Era = "Post")
+
+combined_summarya <- iccat_df_final_summ1 %>% 
+  full_join(iccat_df_final_summ2, by=c("Species","Era", "SSaverageUSD"))
+
+combined_summaryb <- iccat_df_final_summ3 %>% 
+  full_join(iccat_df_final_summ4, by=c("Species","Era", "SSaverageQty"))
+
+combined_summaryc <- left_join(combined_summarya, combined_summaryb, by=c("Species","Era"))
+
+```
+
+```{r table, results='asis', echo=FALSE}
+stargazer(combined_summaryc, digits = 4, type="latex", summary=FALSE)
+```

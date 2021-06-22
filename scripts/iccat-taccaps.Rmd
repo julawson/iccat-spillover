@@ -1,0 +1,110 @@
+---
+title: "iccat-taccaps"
+author: "Julia Lawson, UCSB"
+date: "3/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(tidyverse)
+library(ggpubr)
+library(kableExtra)
+library(reshape2)
+here()
+
+iccat_df <- read.csv(here("data", "iccat_df_unedited.csv"),
+                  stringsAsFactors = F) %>% 
+  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
+  filter(SpeciesStock !="SBF.A+M")
+
+ccsbt_data <- read.csv(here("data", "CCSBT_totalSBT.csv"),
+                  stringsAsFactors = F) %>% 
+  rename(totProd=Catch) %>% 
+  add_column(SpeciesStock="SBF")
+
+eastern.med.bft <- iccat_df %>% 
+  filter(SpeciesStock =="BFT.ATE" | SpeciesStock =="BFT.MED") %>% 
+  group_by(YearC) %>% 
+  summarize(totProd=sum(Qty_t)) %>% 
+  add_column(SpeciesStock="BFT.AE+M") %>% 
+  rename(Year=YearC)
+
+```
+
+```{r import tac caps}
+taccaps <- read.csv(here("data", "taccaps.csv"),
+                  stringsAsFactors = F) %>% 
+  rename(SpeciesStock=stockID)
+
+iccat.reduced <- iccat_df %>% 
+  filter(tacever=="1") %>% 
+  filter(SpeciesStock != "BSH.ATN" & SpeciesStock != "BSH.ATS"& SpeciesStock != "YFT.ATE"& SpeciesStock != "YFT.ATW"& SpeciesStock != "SWO.MED"& SpeciesStock != "WHM.A+M"& SpeciesStock != "BUM.A+M") %>% 
+  select(YearC, Qty_t, SpeciesStock) %>% 
+  rename(Year=YearC) %>% 
+  group_by(Year, SpeciesStock) %>% 
+  summarize(totProd=sum(Qty_t)) %>% 
+  bind_rows(ccsbt_data) %>% 
+  bind_rows(eastern.med.bft)
+
+iccat.combo <- left_join(iccat.reduced, taccaps)
+
+taccapsplot <- ggplot(data=iccat.combo) +
+  theme_bw() +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock)) +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1950,2012)
+
+taccapsplot
+
+##Breaking into two groups
+iccat.combo.grp1 <- iccat.combo %>% 
+  filter(SpeciesStock=="SWO.ATS" | SpeciesStock=="BFT.ATW" | SpeciesStock=="ALB.ATN" )
+
+taccapsplot.grp1 <- ggplot(data=iccat.combo.grp1) +
+  theme_bw() +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1950,2012)
+taccapsplot.grp1
+
+iccat.combo.grp2 <- iccat.combo %>% 
+  filter(SpeciesStock=="SBF" | SpeciesStock=="BET.A+M" | SpeciesStock=="ALB.ATS")
+
+taccapsplot.grp2 <- ggplot(data=iccat.combo.grp2) +
+  theme_bw() +
+  geom_point(mapping=aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1950,2012)
+taccapsplot.grp2
+
+iccat.combo.grp3 <- iccat.combo %>% 
+  filter(SpeciesStock=="SWO.ATN" | SpeciesStock=="BFT.AE+M")
+
+taccapsplot.grp3 <- ggplot(data=iccat.combo.grp3) +
+  theme_bw() +
+  geom_point(mapping=aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1950,2012)
+taccapsplot.grp3
+```
+
+
+```{r export fig of tac caps}
+taccaps <- ggarrange(taccapsplot1, taccapsplot2, ncol = 2, nrow = 1)
+
+annotate_figure(taccaps, bottom = "Year", left = "ICCAT Reported Catch (mt)")
+
+ggsave(plot = last_plot(), filename = here("visuals/taccaps.png"), width = 12, height = 4)
+
+```

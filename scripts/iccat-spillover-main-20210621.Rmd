@@ -1,0 +1,239 @@
+---
+title: "iccat-spillover-main"
+author: "Julia Lawson, UCSB"
+date: "4/27/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(tidyverse)
+library(ggpubr)
+library(kableExtra)
+library(reshape2)
+library(fixest)
+library(broom)
+library(haven)
+library(stargazer)
+here()
+
+#Cleaning data
+iccat <- read.csv(here("data", "t1nc-ALL_20201218.csv"),
+                  stringsAsFactors = F) %>% 
+  unite(FleetGear, c(Fleet,GearGrp), sep=".", remove=FALSE) %>% 
+  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE)
+
+#Adding TAC year dummy variable, based on year that TAC was implemented (yearTACimp)
+iccat_df <- iccat %>%
+  mutate(yearTACimp = case_when(
+    Species == "BFT" & Stock == "ATW" ~ 1982,
+    Species == "SWO" & Stock == "ATN" ~ 1997,
+    Species == "SWO" & Stock == "ATS" ~ 1998,
+    Species == "ALB" & Stock == "ATS" ~ 1999,
+    Species == "BFT" & Stock == "ATE" ~ 1999,
+    Species == "ALB" & Stock == "ATN" ~ 2001,
+    Species == "BET" & Stock == "A+M" ~ 2005,
+    Species == "SBF" & Stock == "A+M" ~ 2007,
+    Species == "BUM" & Stock == "A+M" ~ 2013,
+    Species == "WHM" & Stock == "A+M" ~ 2013,
+    Species == "YFT" & Stock == "ATE" ~ 2013,
+    Species == "YFT" & Stock == "ATW" ~ 2013,
+    Species == "SWO" & Stock == "MED" ~ 2017,
+    Species == "BSH" & Stock == "ATN" ~ 2019,
+    Species == "BSH" & Stock == "ATS" ~ 2019)) %>%
+  mutate(scaled_tacr = YearC-yearTACimp) %>% 
+    mutate(yearTACimp = ifelse(is.na(yearTACimp), 
+                                   Inf, yearTACimp),
+           tacr = 1 * (YearC >= yearTACimp)) %>%
+  mutate(tacever = case_when(
+    Species == "BFT" & Stock == "ATW" ~ 1,
+    Species == "SWO" & Stock == "ATN" ~ 1,
+    Species == "SWO" & Stock == "ATS" ~ 1,
+    Species == "ALB" & Stock == "ATS" ~ 1,
+    Species == "BFT" & Stock == "ATE" ~ 1,
+    Species == "ALB" & Stock == "ATN" ~ 1,
+    Species == "BET" & Stock == "A+M" ~ 1,
+    Species == "SBF" & Stock == "A+M" ~ 1,
+    Species == "BUM" & Stock == "A+M" ~ 1,
+    Species == "WHM" & Stock == "A+M" ~ 1,
+    Species == "YFT" & Stock == "ATE" ~ 1,
+    Species == "YFT" & Stock == "ATW" ~ 1,
+    Species == "SWO" & Stock == "MED" ~ 1,
+    Species == "BSH" & Stock == "ATN" ~ 1,
+    Species == "BSH" & Stock == "ATS" ~ 1)) %>%
+    mutate(tacever = ifelse(is.na(tacever), 0, tacever))
+
+#write.csv(iccat_df, here("data", "iccat_df_unedited.csv"), row.names = F)
+
+
+###Importing price data from NOAA for available species###
+#Cleaning price data from NOAA
+noaa.prices <- read.csv(here("data", "foss_landings.csv"),
+                  stringsAsFactors = F)
+noaa.prices$Dollars <- as.numeric(gsub(",","",noaa.prices$Dollars))
+noaa.prices$Pounds <- as.numeric(gsub(",","",noaa.prices$Pounds))
+
+noaa.prices_edit <- noaa.prices %>% 
+  mutate(SpeciesID = case_when(
+    NMFS.Name == "TUNA, BLUEFIN" ~ "BFT",
+    NMFS.Name == "TUNA, SKIPJACK" ~ "SKJ",
+    NMFS.Name == "SHARK, MAKO, SHORTFIN" ~ "SMA",
+    NMFS.Name == "MARLIN, BLUE" ~ "BUM",
+    NMFS.Name == "TUNA, ALBACORE" ~ "ALB",
+    NMFS.Name == "TUNA, YELLOWFIN" ~ "YFT",
+    NMFS.Name == "SHARK, BLUE" ~ "BSH",
+    NMFS.Name == "TUNA, BIGEYE" ~ "BET",
+    NMFS.Name == "TUNA, BLACKFIN" ~ "BLF",
+    NMFS.Name == "TUNA, BLACKFIN" ~ "LTA")) %>% 
+  na.omit(SpeciesID) %>% 
+  filter(Region.Name!="Gulf") %>% 
+  group_by(Year,SpeciesID) %>% 
+  mutate(Kilogram = Pounds*0.453592) %>% 
+  mutate(USDperkilo = Kilogram/Dollars) %>% 
+  summarize(avUSDperkilo = mean(USDperkilo)) %>% 
+  filter(avUSDperkilo <= 80) %>% 
+  rename(YearC=Year) %>% 
+  rename(Species=SpeciesID)
+  
+#ggplot(noaa.prices_edit, aes(x=YearC, y=avUSDperkilo, color=Species)) +
+#  geom_line()
+
+```
+
+```{r dataset modifications}
+
+###Variations in FleetGear###
+#all fleets, default setup
+allfleets <- iccat_df %>% 
+  select(YearC, FleetGear,SpeciesStock) %>% 
+  distinct(FleetGear) %>% 
+  select(FleetGear)
+#isolating just the fleets that span from ~1970 to 2019
+longhaul <- iccat_df %>% 
+  filter(YearC >= 1970 & YearC <= 2019) %>% 
+  select(YearC, FleetGear,SpeciesStock) %>% 
+  distinct(YearC, FleetGear) %>% 
+  count(FleetGear) %>% 
+  filter(n>=45) %>% 
+  select(FleetGear)
+#isolating just the new entrants from ~1970 to 2019
+newentrants <- iccat_df %>% 
+  anti_join(longhaul, by="FleetGear") %>% 
+  select(YearC, FleetGear,SpeciesStock) %>% 
+  distinct(YearC, FleetGear) %>% 
+  count(FleetGear) %>%
+  select(FleetGear)
+
+###Variations in SpeciesStock###
+#Reporting requirements have become increasingly stringent over time.
+#In order to account for this, I am filtering for stocks that have been reported to ICCAT for at least 40 years (~1979 to 2019)
+longhaul.species <- iccat_df %>% 
+  filter(YearC >= 1970 & YearC <= 2019) %>% 
+  select(YearC, SpeciesStock) %>% 
+  distinct(YearC, SpeciesStock) %>% 
+  count(SpeciesStock) %>% 
+  filter(n>=40) %>% 
+  select(SpeciesStock)
+
+```
+
+
+```{r cleaned dataset}
+
+#Creating a tac_any column, which shows in a given fleet year (grouped by FleetGear and YearC) if there are any stocks that are catch regulated (1 if at least one TAC-regulated stock is in the catch, 0 if none)
+iccat_df_final_edit <- iccat_df %>% 
+  inner_join(allfleets, by="FleetGear") %>%
+  #inner_join(longhaul.species, by="SpeciesStock") %>% 
+  left_join(noaa.prices_edit, by = c("Species","YearC")) %>% 
+  #filter(GearGrp=="LL") %>%  #Adding in an optional filter for gear type (LL=long line; PS=purse seine)
+  group_by(YearC, FleetGear) %>% 
+  mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>% 
+  group_by(YearC, FleetGear) %>% 
+  mutate(totalFleetCatch = sum(Qty_t)) %>%
+  mutate(propStock = Qty_t/totalFleetCatch) %>% 
+  group_by(FleetGear, SpeciesStock) %>% 
+  mutate(diff=propStock-lag(propStock,k=1)) %>%
+  mutate(Qtydiff=Qty_t-lag(Qty_t,k=1)) #%>% 
+  #na.omit(avUSDperkilo) #Adding an optional filter to isolate only species with NOAA price data
+
+write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = F)
+
+```
+
+```{r analaysis by stock}
+#Question. Does the proportion of the catch of stocks that never receive a TAC increase or decrease relative to the catch of stocks that eventually receive a TAC?
+#Answer. The sign is positive, suggesting that the proportion of the catch of non-TAC stocks increases following TAC implementation. However the difference is not statistically significant, suggesting that the effect of this leakage is minimal.
+
+stockreg <- feols(propStock ~ tacever | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
+stockreg_coef_tab <- stockreg$coeftable
+stockreg_coef_tab 
+
+```
+
+```{r analaysis by fleet}
+#Question. Does the proportion of the catch of non-TAC stocks in fleets that are catching one or more TAC stock increase or decrease relative to the catch of non-TAC stocks in fleets that do not catch any TAC stocks?
+#Answer. The treatment (being a fleet that catches one or more TAC stock) catch of non-TAC stocks in fleets that are catching one or more TAC stock increase 
+
+fleetreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
+fleetreg_coef_tab <- fleetreg$coeftable
+fleetreg_coef_tab
+
+```
+
+```{r analysis older code}
+
+#Regression 1. ----
+#Question: Does the catch of non-TAC stocks in fleets that are catching one or more TAC stock increase or decrease relative to the catch of non-TAC stocks in fleets that do not catch any TAC stocks?
+#Answer from the regression output: Fleets that catch one or more TAC stock increase their catch by 10.89 metric tons, relative to fleets that do not catch any TAC stocks.
+
+# tac_reg1 <- lm(Qty_t ~ tac_any + as.factor(YearC) + FleetGear + SpeciesStock, data = filter(iccat_df_final_edit, tacr==0))
+# summary(tac_reg1) #matches feols output
+#mb, 5.3.21: commenting out for speed, made YearC into a categorical FE
+
+tac_reg1b <- feols(Qty_t ~ tac_any | YearC + FleetGear + SpeciesStock, data = filter(iccat_df_final_edit, tacr==0))
+coef_tab <- tac_reg1b$coeftable
+#This regression assumes that all stocks change in the same way over time (this is the YearC fixed effect on its own)
+
+tac_reg1c <- feols(Qty_t ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0)) #mb: adding year-by-speciesstock FEs
+coef_tab <- tac_reg1c$coeftable
+#result: positive, significant spillover when adding FEs that account for variations in stock-by-year
+#JML: Answer from regression output: The total catch of non-TAC regulated stocks (SpeciesStock) increases by 113.40 metric tons for fleets (FleetGear) that catch at least one TAC managed stock (tac_any = 1), when SpeciesStock is interacted with year (when we allow for each stock to individually vary over time). 
+
+#Regression 2. ----
+#Creating a column that is proportion of TAC-treated stocks in total catch (prop_tacC).
+#iccat_df_final_test2 <- iccat_df_final_edit %>% 
+#  group_by(YearC, FleetGear) %>% 
+#  mutate(totalCatch = sum(Qty_t),
+#         tac_catch = sum(Qty_t[tacr==1])) %>% #Total catch grouped by FleetGear and YearC
+#  mutate(prop_tacC = tac_catch/totalCatch) #mb: notice this is different
+
+#hist(iccat_df_final_test2$prop_tacC)
+#JML: commented out Mark's code (above) to try new code (below)
+
+#Creating a column that is the proportion of TAC-treated stocks in total catch in years prior to when the TAC went into effect (prop_tacCpre)
+#Proportion of TAC catch averaged over five years before the TAC went into effect for each stock
+iccat_df_final_reg <- iccat_df_final_edit %>% 
+  filter(scaled_tacr >=-5 & scaled_tacr <=0) %>% 
+  group_by(SpeciesStock,scaled_tacr) %>% 
+  summarize(meanPropStock5yr = mean(propStock)) 
+
+#Question. Does the proportion of TAC-treated stocks in a given fleet's total catch increase or decrease relative to the proportion of non-TAC treated stocks following TAC implementation?
+#Answer from the regression:  The proportion of stocks that would be subject to TAC restrictions (tacever=1, tacr=0) in a given fleet's total catch, were 316X higher in the years prior to TAC implementation (tacr=0) compared to the years after TAC restrictions were in place.
+
+# tac_reg2 <- lm(Qty_t ~ tac_any*prop_tacC + as.factor(YearC) + FleetGear + SpeciesStock, data = filter(iccat_df_final_reg, tacr==0))
+# summary(tac_reg2)
+# 
+# tac_reg2b <- feols(Qty_t ~ tac_any*prop_tacC | YearC + FleetGear + SpeciesStock, data = filter(iccat_df_final_reg, tacr==0))
+# # print(tac_reg2b)
+
+tac_reg2c <- feols(Qty_t ~ prop_pretac_catch | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_reg, tacr==0))
+coef_tab <- tac_reg2c$coeftable
+
+#note: this isn't strictly right, because we probably want the dosage based on the pre-treatment period only
+
+```
+

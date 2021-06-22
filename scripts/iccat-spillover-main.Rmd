@@ -18,6 +18,7 @@ library(reshape2)
 library(fixest)
 library(broom)
 library(haven)
+library(stargazer)
 here()
 
 #Cleaning data
@@ -56,9 +57,10 @@ iccat_df <- iccat.fil %>%
     Species == "SWO" & Stock == "MED" ~ 2017,
     Species == "BSH" & Stock == "ATN" ~ 2019,
     Species == "BSH" & Stock == "ATS" ~ 2019)) %>%
+  mutate(scaled_tacr = YearC-yearTACimp) %>% 
     mutate(yearTACimp = ifelse(is.na(yearTACimp), 
                                    Inf, yearTACimp),
-           tacr = 1 * (YearC >= yearTACimp)) %>% 
+           tacr = 1 * (YearC >= yearTACimp)) %>%
   mutate(tacever = case_when(
     Species == "BFT" & Stock == "ATW" ~ 1,
     Species == "SWO" & Stock == "ATN" ~ 1,
@@ -77,6 +79,8 @@ iccat_df <- iccat.fil %>%
     Species == "BSH" & Stock == "ATS" ~ 1)) %>%
     mutate(tacever = ifelse(is.na(tacever), 0, tacever))
 
+write.csv(iccat_df, here("data", "iccat_df_unedited.csv"), row.names = F)
+
 #Accumulation of stocks over time, increase in reporting.
 iccat_1970 <- iccat_df %>% 
   filter(YearC == 1970) %>% 
@@ -89,55 +93,111 @@ iccat_2019 <- iccat_df %>%
 incommon <- inner_join(iccat_2019, iccat_1970)
 
 #There has been an increase in fleets (FleetGear) over time. 196 FleetGear in 2019, 41 in 1970.
-iccat_fg_1970 <- iccat_df %>% 
-  filter(YearC == 1970) %>% 
-  ungroup() %>% 
-  distinct(FleetGear)
-iccat_fg_2019 <- iccat_df %>% 
-  filter(YearC == 2019) %>% 
-  ungroup() %>% 
-  distinct(FleetGear)
-incommon_fg <- inner_join(iccat_fg_2019, iccat_fg_1970)
+#iccat_fg_1970 <- iccat_df %>% 
+#  filter(YearC == 1970) %>% 
+#  ungroup() %>% 
+#  distinct(FleetGear)
+#iccat_fg_2019 <- iccat_df %>% 
+#  filter(YearC == 2019) %>% 
+#  ungroup() %>% 
+#  distinct(FleetGear)
+#incommon_fg <- inner_join(iccat_fg_2019, iccat_fg_1970)
 
 #There are 63 stock groups that have been added between 1970 and 2019. I am removing them so that the numbers are not inflated as new stocks are reported over time. Only stocks that are "in common" in 1970 and 2019 will be retained. 
 #There has been an increase in fleets over time. I am only including fleets that have remained part of ICCAT from 1970 to 2019.
 
 iccat_df_final <- left_join(incommon, iccat_df, by="ScieName") %>% 
-  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
-  left_join(incommon_fg, by="FleetGear")
+  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) #%>% 
+#  left_join(incommon_fg, by="FleetGear")
 
 #isolating just the fleets that span from 1970 to 2019
-filter <- iccat_df_final_edit %>% 
+filter <- iccat_df_final %>% 
+  filter(YearC >= 1970 & YearC <= 2019) %>% 
   select(YearC, FleetGear,SpeciesStock) %>% 
   distinct(YearC, FleetGear) %>% 
   count(FleetGear) %>% 
-  filter(n==50) %>% 
+  filter(n>=45) %>% 
   select(FleetGear)
 
+```
+
+```{r prices}
+
+#Cleaning price data from NOAA
+noaa.prices <- read.csv(here("data", "foss_landings.csv"),
+                  stringsAsFactors = F)
+noaa.prices$Dollars <- as.numeric(gsub(",","",noaa.prices$Dollars))
+noaa.prices$Pounds <- as.numeric(gsub(",","",noaa.prices$Pounds))
+
+noaa.prices_edit <- noaa.prices %>% 
+  mutate(SpeciesID = case_when(
+    NMFS.Name == "TUNA, BLUEFIN" ~ "BFT",
+    NMFS.Name == "TUNA, SKIPJACK" ~ "SKJ",
+    NMFS.Name == "SHARK, MAKO, SHORTFIN" ~ "SMA",
+    NMFS.Name == "MARLIN, BLUE" ~ "BUM",
+    NMFS.Name == "TUNA, ALBACORE" ~ "ALB",
+    NMFS.Name == "TUNA, YELLOWFIN" ~ "YFT",
+    NMFS.Name == "SHARK, BLUE" ~ "BSH",
+    NMFS.Name == "TUNA, BIGEYE" ~ "BET",
+    NMFS.Name == "TUNA, BLACKFIN" ~ "BLF",
+    NMFS.Name == "TUNA, BLACKFIN" ~ "LTA")) %>% 
+  na.omit(SpeciesID) %>% 
+  filter(Region.Name!="Gulf") %>% 
+  group_by(Year,SpeciesID) %>% 
+  mutate(Kilogram = Pounds*0.453592) %>% 
+  mutate(USDperkilo = Kilogram/Dollars) %>% 
+  summarize(avUSDperkilo = mean(USDperkilo)) %>% 
+  filter(avUSDperkilo <= 80) %>% 
+  rename(YearC=Year) %>% 
+  rename(Species=SpeciesID)
+  
+#ggplot(noaa.prices_edit, aes(x=YearC, y=avUSDperkilo, color=Species)) +
+#  geom_line()
+
+```
+
+```{r cleaned dataset}
+
 #Creating a tac_any column, which shows in a given fleet year (grouped by FleetGear and YearC) if there are any stocks that are catch regulated (1 if at least one TAC-regulated stock is in the catch, 0 if none)
-iccat_df_final_edit <- iccat_df_final %>%
+iccat_df_final_edit <- filter %>% 
+  left_join(iccat_df_final, by="FleetGear") %>%
+  left_join(noaa.prices_edit, by = c("Species","YearC")) %>% 
+#  filter(GearGrp=="PS") %>%  #Adding in a filter for just Purse Seine fleets
   group_by(YearC, FleetGear) %>% 
   mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>% 
   group_by(YearC, FleetGear) %>% 
   mutate(totalFleetCatch = sum(Qty_t)) %>%
   mutate(propStock = Qty_t/totalFleetCatch) %>% 
   group_by(FleetGear, SpeciesStock) %>% 
-  mutate(diff=propStock-lag(propStock,k=1)) %>% 
-  group_by(FleetGear) %>% 
-  filter(YearC >= 1970 & YearC <= 2019) %>% 
-  right_join(filter, by="FleetGear")
+  mutate(diff=propStock-lag(propStock,k=1)) %>%
+  mutate(Qtydiff=Qty_t-lag(Qty_t,k=1)) %>%
+  group_by(FleetGear) #%>% 
+  #filter(YearC >= 1970 & YearC <= 2019) #%>% 
+  #na.omit(avUSDperkilo) #here I'm removing all stocks that didn't have pricing in the NOAA database. Reduces sample size.
+
+write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = F)
 
 ```
 
 ```{r analaysis by stock}
-#Question. Does the proportion of the catch of stocks that never receive a TAC increase or decrease relative to the catch of stocks that eventually recieve a TAC?
-#Answer. There is no difference between the proportion of the catch of stocks that never receive a TAC and those that eventually receive one.
+#Question. Does the proportion of the catch of stocks that never receive a TAC increase or decrease relative to the catch of stocks that eventually receive a TAC?
+#Answer. The sign is positive, suggesting that the proportion of the catch of non-TAC stocks increases following TAC implementation. However the difference is not statistically significant, suggesting that the effect of this leakage is minimal.
 
-stockreg <- feols(propStock ~ tacever | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
+stockreg <- feols(propStock ~ tacever | YearC^SpeciesStock + FleetGear + avUSDperkilo, data = filter(iccat_df_final_edit, tacr==0))
 stockreg_coef_tab <- stockreg$coeftable
 
 ```
 
+
+```{r analysis by price}
+
+#Question. Does the value of the stocks that never receive a TAC increase or decrease relative to stocks that do eventually receive a TAC? 
+#Answer: The sign is positive, suggesting that prices of non-TAC regulated stocks increase following TAC implementation, however the difference is not statistically significant suggesting that the price increase is relatively minimal.
+
+pricereg <- feols(avUSDperkilo ~ tacever | YearC^SpeciesStock + FleetGear + log(Qty_t), data = filter(iccat_df_final_edit, tacr==0))
+pricereg_coef_tab <- pricereg$coeftable
+
+```
 
 ```{r analaysis by fleet}
 #Question. Does the proportion of the catch of non-TAC stocks in fleets that are catching one or more TAC stock increase or decrease relative to the catch of non-TAC stocks in fleets that do not catch any TAC stocks?
@@ -202,26 +262,3 @@ coef_tab <- tac_reg2c$coeftable
 
 ```
 
-
-
-```{r old code}
-
-# mb: leaving some old code that is probably wrong  
-#   filter(tacr == 1) %>% 
-#   group_by(YearC, FleetGear) %>% 
-#   mutate(prop_tacC = Qty_t/totalCatch) %>%
-#   # select(YearC, FleetGear, SpeciesStock, prop_tacC)
-#   select(YearC, FleetGear, prop_tacC) #mb: should only merge on Year and FleetGear
-# 
-# hist(iccat_df_final_test2$prop_tacC)
-# 
-# #Adding back into full dataset
-# iccat_df_final_reg <- iccat_df_final_edit %>% 
-#   left_join(.,iccat_df_final_test2) #%>% 
-#   # mutate(prop_tacC = if_else(is.na(prop_tacC), 0, prop_tacC)) #unnecessary, zeros created by merge error in previous step
-# 
-# table(see$prop_tacC)
-
-#iccat_df_final_reg <- iccat_df_final_test2
-
-```

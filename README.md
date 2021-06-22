@@ -2,6 +2,16 @@
 
 ###ICCAT Data Code System, as found on https://www.iccat.int/en/stat_codes.html ###
 
+To confirm that no spillover was occurring between treated and untreated units, we used catch data reported to the International Convention on the Conservation of Atlantic Tunas (ICCAT). In addition to the data already available, we created two new columns – one unique identifier that combined fleet (typically corresponding to a Contracting Party name) and gear type (i.e., CAN.LL is the Canadian Longline fleet), and another unique identifier that combined species and stock (i.e., ALB.ATN is North Atlantic Albacore tuna). Species-specific price data from NOAA were also acquired, although these data only represented landing prices in the United States (specifically New England, Middle Atlantic and South Atlantic), and were therefore not representative of landing prices for all Contracting Parties.
+
+Several modifications were made to this dataset to remove any potential biases that have been driven by the increase in Contracting Parties (12 CPs in 1970 and 53 CPs in 2019) or the increase in the scope of species-stocks included in the Task I dataset (47 in 1970 and 115 in 2019). These subset datasets were individually examined for potential leakage.
+(a)	Is leakage occurring for the Fleet-Gears with the longest time series in the ICCAT database? We examined this by isolating Fleet-Gears that had reported at least forty years of data to ICCAT (~1979 to 2019).
+(b)	Is leakage occurring as new Fleet-Gear entrants join the agreement? Fleet-Gears that represented new entrants (Fleet-Gears that reported less than forty years of data).
+(c)	Is leakage occurring for Species-Stocks with the longest time series in the ICCAT database? Species-Stocks that had at least forty years of data to ICCAT (~1979 to 2019).
+(d)	Are certain gear types more prone to leakage? 
+a.	Longline Fleets only.
+b.	Purse Seine Fleets only.
+
 #Species: Species abbreviation code
 #ScieName: Scientific name
 #SpeciesGrp: Six general categories ("1-Tuna (major sp.)" "2-Tuna (small)" "3-Tuna (other)" "5-Sharks (other)" "4-Sharks (major)"  "6-Other Species")
