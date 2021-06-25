@@ -15,7 +15,7 @@ library(kableExtra)
 library(reshape2)
 here()
 
-iccat_df <- read.csv(here("data", "iccat_df_unedited.csv"),
+iccat_df <- read.csv(here("data", "iccat_df_edited.csv"),
                   stringsAsFactors = F) %>% 
   unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
   filter(SpeciesStock !="SBF.A+M")
@@ -23,6 +23,7 @@ iccat_df <- read.csv(here("data", "iccat_df_unedited.csv"),
 ccsbt_data <- read.csv(here("data", "CCSBT_totalSBT.csv"),
                   stringsAsFactors = F) %>% 
   rename(totProd=Catch) %>% 
+  mutate(scaled_tacr = Year-2006) %>% 
   add_column(SpeciesStock="SBF")
 
 eastern.med.bft <- iccat_df %>% 
@@ -30,48 +31,59 @@ eastern.med.bft <- iccat_df %>%
   group_by(YearC) %>% 
   summarize(totProd=sum(Qty_t)) %>% 
   add_column(SpeciesStock="BFT.AE+M") %>% 
+  mutate(scaled_tacr = YearC-1999) %>% 
   rename(Year=YearC)
+  
 
 ```
 
-```{r import tac caps}
+```{r import tac caps and scrs advice}
 taccaps <- read.csv(here("data", "taccaps.csv"),
                   stringsAsFactors = F) %>% 
   rename(SpeciesStock=stockID)
 
+scrsad <- read.csv(here("data", "scrsadvice.csv"),
+                  stringsAsFactors = F) %>% 
+  rename(SpeciesStock=stockID) %>% 
+  rename(Year=RepYear) %>% 
+  na.omit()
+
 iccat.reduced <- iccat_df %>% 
   filter(tacever=="1") %>% 
   filter(SpeciesStock != "BSH.ATN" & SpeciesStock != "BSH.ATS"& SpeciesStock != "YFT.ATE"& SpeciesStock != "YFT.ATW"& SpeciesStock != "SWO.MED"& SpeciesStock != "WHM.A+M"& SpeciesStock != "BUM.A+M") %>% 
-  select(YearC, Qty_t, SpeciesStock) %>% 
+  select(YearC, Qty_t, SpeciesStock, scaled_tacr) %>% 
   rename(Year=YearC) %>% 
-  group_by(Year, SpeciesStock) %>% 
+  group_by(Year, scaled_tacr, SpeciesStock) %>% 
   summarize(totProd=sum(Qty_t)) %>% 
   bind_rows(ccsbt_data) %>% 
   bind_rows(eastern.med.bft)
 
-iccat.combo <- left_join(iccat.reduced, taccaps)
+iccat.combo <- left_join(iccat.reduced, taccaps) %>% 
+  right_join(scrsad, by=c("Year","SpeciesStock"))
 
 taccapsplot <- ggplot(data=iccat.combo) +
   theme_bw() +
-  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock)) +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock)) + 
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
   geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
   theme(legend.title = element_blank(), legend.position = "bottom") +
   xlab("") + ylab("") +
-  xlim(1950,2012)
+  xlim(1980,2012)
 
 taccapsplot
 
-##Breaking into two groups
+##Breaking into three groups
 iccat.combo.grp1 <- iccat.combo %>% 
   filter(SpeciesStock=="SWO.ATS" | SpeciesStock=="BFT.ATW" | SpeciesStock=="ALB.ATN" )
 
 taccapsplot.grp1 <- ggplot(data=iccat.combo.grp1) +
   theme_bw() +
   geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
   geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
   theme(legend.title = element_blank(), legend.position = "bottom") +
   xlab("") + ylab("") +
-  xlim(1950,2012)
+  xlim(1980,2012)
 taccapsplot.grp1
 
 iccat.combo.grp2 <- iccat.combo %>% 
@@ -80,10 +92,11 @@ iccat.combo.grp2 <- iccat.combo %>%
 taccapsplot.grp2 <- ggplot(data=iccat.combo.grp2) +
   theme_bw() +
   geom_point(mapping=aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
   geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
   theme(legend.title = element_blank(), legend.position = "bottom") +
   xlab("") + ylab("") +
-  xlim(1950,2012)
+  xlim(1997,2012)
 taccapsplot.grp2
 
 iccat.combo.grp3 <- iccat.combo %>% 
@@ -92,19 +105,113 @@ iccat.combo.grp3 <- iccat.combo %>%
 taccapsplot.grp3 <- ggplot(data=iccat.combo.grp3) +
   theme_bw() +
   geom_point(mapping=aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
   geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
   theme(legend.title = element_blank(), legend.position = "bottom") +
   xlab("") + ylab("") +
-  xlim(1950,2012)
+  xlim(1995,2012)
 taccapsplot.grp3
+
+#Breaking into two groups according to constraining/maintaining 
+#Constraining Group [Group 1 - BFT.ATW, SWO.ATN, BFT.AE+M, SBT]
+iccat.combo.grp1b <- iccat.combo %>% 
+  filter(SpeciesStock=="SWO.ATN" | SpeciesStock=="BFT.ATW" | SpeciesStock=="BFT.AE+M" )
+
+taccapsplot.grp1b <- ggplot(data=iccat.combo.grp1b) +
+  theme_bw() +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1980,2012)
+taccapsplot.grp1b
+
+ggsave(plot = last_plot(), filename = here("visuals/constraining.png"), width = 6, height = 4)
+
+#Middle of the road group [Group 2 - SWO.ATS, ALB.ATN]
+iccat.combo.grp2b <- iccat.combo %>% 
+  filter(SpeciesStock=="ALB.ATN"| SpeciesStock=="SWO.ATS")
+
+taccapsplot.grp2b <- ggplot(data=iccat.combo.grp2b) +
+  theme_bw() +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1997,2012)
+taccapsplot.grp2b
+
+ggsave(plot = last_plot(), filename = here("visuals/ambig.png"), width = 6, height = 4)
+
+#Maintaining Group [Group 3 - ALB.ATS, BET.A+M]
+iccat.combo.grp3b <- iccat.combo %>% 
+  filter(SpeciesStock=="ALB.ATS" | SpeciesStock=="BET.A+M")
+
+taccapsplot.grp3b <- ggplot(data=iccat.combo.grp3b) +
+  theme_bw() +
+  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
+  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
+  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
+  theme(legend.title = element_blank(), legend.position = "bottom") +
+  xlab("") + ylab("") +
+  xlim(1997,2012)
+taccapsplot.grp3b
+
+ggsave(plot = last_plot(), filename = here("visuals/maintaining.png"), width = 6, height = 4)
 ```
 
 
 ```{r export fig of tac caps}
-taccaps <- ggarrange(taccapsplot1, taccapsplot2, ncol = 2, nrow = 1)
+taccaps <- ggarrange(taccapsplot.grp1b, taccapsplot.grp3b, ncol = 2, nrow = 1)
 
 annotate_figure(taccaps, bottom = "Year", left = "ICCAT Reported Catch (mt)")
 
-ggsave(plot = last_plot(), filename = here("visuals/taccaps.png"), width = 12, height = 4)
+ggsave(plot = last_plot(), filename = here("visuals/taccaps_scrsadv.png"), width = 10, height = 4)
 
+
+
+```
+
+```{r kobe plot for different tacs}
+health <- read.csv(here("data", "healthindicators.csv"),
+                  stringsAsFactors = F)
+health$Group <- as.character(health$Group)
+
+#Pre-TAC comparing SCRS understanding at the time with Ram Legacy data
+health_pre <- health %>% 
+  filter(TimePeriod=="0")
+healthindi_pre <- ggplot(data=health_pre,aes(x=BvBmsy, y=FvFmsy, color=SpeciesStock, shape=Dataset)) +
+  theme_bw() +
+  geom_point(size = 5) +
+  geom_vline(xintercept = 1,linetype = "longdash", colour="darkgrey") +
+  geom_hline(yintercept = 1,linetype = "longdash", colour="darkgrey") +
+  geom_text(aes(label=SpeciesStock), nudge_x = 0.04, nudge_y = -0.05, size=3) +
+  xlab("B/BMSY") + ylab("F/FMSY")
+healthindi_pre
+
+#Just SCRS estimates, and Ram estimates for BFT.ATW, SBT, and BFT.AE+M
+health_pre2 <- health %>% 
+  filter(TimePeriod=="0") %>% 
+  filter(Dataset=="Scrs")
+no_scrs_est <- health %>% 
+  filter(TimePeriod=="0") %>% 
+  filter(SpeciesStock=="BFT.ATW" | SpeciesStock=="SBT" | SpeciesStock=="BFT.AE+M")
+sci_advice_pre <- bind_rows(health_pre2, no_scrs_est)
+
+healthindi_pre2 <- ggplot(data=sci_advice_pre,aes(x=BvBmsy, y=FvFmsy, color=Group)) +
+  theme_bw() +
+  geom_point(size = 4) +
+  geom_vline(xintercept = 1,linetype = "longdash", colour="darkgrey") +
+  geom_hline(yintercept = 1,linetype = "longdash", colour="darkgrey") +
+  geom_text(aes(label=SpeciesStock), nudge_x = 0.05, nudge_y = -0.09, size=3) +
+  xlab("B/BMSY") + ylab("F/FMSY") +
+  scale_color_manual(values = c("#f03b20", "#feb24c", "#2ca25f"),
+                     labels = c("Constraining", "Ambiguous", "Maintaining")) +
+  theme(legend.title = element_blank(), legend.position = "bottom") 
+
+healthindi_pre2
+
+ggsave(plot = last_plot(), filename = here("visuals/health_scrs.png"), width = 6, height = 4)
 ```
