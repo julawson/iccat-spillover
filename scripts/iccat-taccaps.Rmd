@@ -18,7 +18,8 @@ here()
 iccat_df <- read.csv(here("data", "iccat_df_edited.csv"),
                   stringsAsFactors = F) %>% 
   unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
-  filter(SpeciesStock !="SBF.A+M")
+  filter(SpeciesStock =="SBF.A+M") %>% 
+  rename(Year=YearC)
 
 ccsbt_data <- read.csv(here("data", "CCSBT_totalSBT.csv"),
                   stringsAsFactors = F) %>% 
@@ -34,6 +35,8 @@ eastern.med.bft <- iccat_df %>%
   mutate(scaled_tacr = YearC-1999) %>% 
   rename(Year=YearC)
   
+combo.sbf <- ccsbt_data %>% 
+  left_join(iccat_df,by=Year)
 
 ```
 
@@ -205,6 +208,8 @@ healthindi_pre2 <- ggplot(data=sci_advice_pre,aes(x=BvBmsy, y=FvFmsy, color=Grou
   geom_point(size = 4) +
   geom_vline(xintercept = 1,linetype = "longdash", colour="darkgrey") +
   geom_hline(yintercept = 1,linetype = "longdash", colour="darkgrey") +
+  geom_hline(yintercept = 1.2,linetype = "longdash", colour="darkgrey") +
+  geom_hline(yintercept = 0.8,linetype = "longdash", colour="darkgrey") +
   geom_text(aes(label=SpeciesStock), nudge_x = 0.05, nudge_y = -0.09, size=3) +
   xlab("B/BMSY") + ylab("F/FMSY") +
   scale_color_manual(values = c("#f03b20", "#feb24c", "#2ca25f"),
