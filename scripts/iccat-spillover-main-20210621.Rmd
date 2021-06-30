@@ -102,8 +102,6 @@ noaa.prices_edit <- noaa.prices %>%
 #ggplot(noaa.prices_edit, aes(x=YearC, y=avUSDperkilo, color=Species)) +
 #  geom_line()
 
-#Test push
-
 ```
 
 ```{r dataset modifications}
