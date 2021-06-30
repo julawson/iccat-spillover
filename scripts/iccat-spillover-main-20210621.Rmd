@@ -168,7 +168,7 @@ write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = 
 #Question. Does the total catch (Qty_t) of stocks that never receive a TAC (tacever==0) change within vessels that catch at least one TAC-regulated stock (tac_any==1)?
 #Answer. The sign is positive, suggesting that the total catch of stocks that never receive a TAC increases within vessels that catch at least one TAC-managed stock. However, the difference is not statistically significant, suggesting that the change in total volumes caught is minimal.
 
-stockvolreg <- feols(Qty_t ~ tac_any | YearC^FleetGear + SpeciesStock, data = filter(iccat_df_final_edit, tacever==0))
+stockvolreg <- feols(Qty_t ~ tac_any | FleetGear + YearC^SpeciesStock, data = filter(iccat_df_final_edit, tacever==0))
 stockvolreg_coef_table <- stockvolreg$coeftable
 stockvolreg_coef_table
 
@@ -180,7 +180,7 @@ stockvolreg_coef_table
 #Question. Does the proportion of the catch (propStock) of stocks that never receive a TAC (tac_ever==0) change within vessels that catch at least one TAC_regulated stock (tac_any==1)?
 #Answer. The difference is statistically significant and negative (-0.04), suggesting that the proportion of non-TAC stocks decreases within FleetGears that catch at least one TAC managed stock.
 
-stockreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacever==0))
+stockreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacever==0), cluster="FleetGear")
 stockreg_coef_tab <- stockreg$coeftable
 stockreg_coef_tab 
 
