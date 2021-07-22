@@ -140,12 +140,12 @@ iccat_df_cons <- iccat %>%
 
 ###Variations in FleetGear###
 #all fleets, default setup
-allfleets <- iccat_df %>% 
+allfleets <- iccat_df_main %>% 
   select(YearC, FleetGear,SpeciesStock) %>% 
   distinct(FleetGear) %>% 
   select(FleetGear)
 #isolating just the fleets that span from ~1970 to 2019
-longhaul <- iccat_df %>% 
+longhaul <- iccat_df_main %>% 
   filter(YearC >= 1970 & YearC <= 2012) %>% 
   select(YearC, FleetGear,SpeciesStock) %>% 
   distinct(YearC, FleetGear) %>% 
@@ -153,7 +153,7 @@ longhaul <- iccat_df %>%
   filter(n>=42) %>% 
   select(FleetGear)
 #isolating just the new entrants from ~1970 to 2019
-newentrants <- iccat_df %>% 
+newentrants <- iccat_df_main %>% 
   anti_join(longhaul, by="FleetGear") %>% 
   select(YearC, FleetGear,SpeciesStock) %>% 
   distinct(YearC, FleetGear) %>% 
@@ -163,7 +163,7 @@ newentrants <- iccat_df %>%
 ###Variations in SpeciesStock###
 #Reporting requirements have become increasingly stringent over time.
 #In order to account for this, I am filtering for stocks that have been reported to ICCAT for at least 40 years (~1979 to 2019)
-longhaul.species <- iccat_df %>% 
+longhaul.species <- iccat_df_main %>% 
   filter(YearC >= 1970 & YearC <= 2012) %>% 
   select(YearC, SpeciesStock) %>% 
   distinct(YearC, SpeciesStock) %>% 
@@ -173,9 +173,14 @@ longhaul.species <- iccat_df %>%
 
 #Variations in Contracting Parties
 #Isolating just the 'OG' CPs from 1970.
-longhaul.cps <- iccat_df %>% 
+longhaul.cps <- iccat_df_main %>% 
   filter(YearC >= 1970 & YearC <= 2012) %>%
   filter(PartyName=="UNITED STATES" | PartyName=="JAPAN" | PartyName=="SOUTH AFRICA" | PartyName=="GHANA" | PartyName=="CANADA"| PartyName=="FRANCE (St-Pierre et Miquelon)" | PartyName=="BRAZIL" | PartyName=="MAROC" | PartyName=="KOREA REP.") %>% 
+  distinct(PartyName)
+
+newentrant.cps <- iccat_df_main %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>%
+  filter(PartyName!="UNITED STATES" & PartyName!="JAPAN" & PartyName!="SOUTH AFRICA" & PartyName!="GHANA" & PartyName!="CANADA"& PartyName!="FRANCE (St-Pierre et Miquelon)" & PartyName!="BRAZIL" & PartyName!="MAROC" & PartyName!="KOREA REP.") %>% 
   distinct(PartyName)
 
 ```
@@ -183,12 +188,12 @@ longhaul.cps <- iccat_df %>%
 ```{r cleaned dataset}
 
 #Creating a tac_any column, which shows in a given fleet year (grouped by FleetGear and YearC) if there are any stocks that are catch regulated (1 if at least one TAC-regulated stock is in the catch, 0 if none)
-iccat_df_final_edit <- iccat_df %>% 
+iccat_df_final_edit <- iccat_df_main %>% 
   inner_join(allfleets, by="FleetGear") %>%
-  inner_join(longhaul.species, by="SpeciesStock") %>% 
   inner_join(longhaul.cps, by="PartyName") %>% 
+  inner_join(longhaul.species, by="SpeciesStock") %>% 
   #left_join(noaa.prices_edit, by = c("Species","YearC")) %>% 
-  #filter(GearGrp=="LL") %>%  #Adding in an optional filter for gear type (LL=long line; PS=purse seine)
+  filter(GearGrp=="LL") %>%  #Adding in an optional filter for gear type (LL=long line; PS=purse seine)
   group_by(YearC, FleetGear) %>% 
   mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>%
   group_by(YearC, FleetGear) %>% 
