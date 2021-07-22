@@ -18,7 +18,7 @@ library(reshape2)
 library(fixest)
 library(broom)
 library(haven)
-library(stargazer)
+library(gtsummary)
 here()
 
 #Cleaning data
@@ -28,76 +28,108 @@ iccat <- read.csv(here("data", "t1nc-ALL_20201218.csv"),
   unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE)
 
 #Adding TAC year dummy variable, based on year that TAC was implemented (yearTACimp)
+#Removing data beyond 2012.
 iccat_df <- iccat %>%
   mutate(yearTACimp = case_when(
-    Species == "BFT" & Stock == "ATW" ~ 1982,
-    Species == "SWO" & Stock == "ATN" ~ 1997,
-    Species == "SWO" & Stock == "ATS" ~ 1998,
-    Species == "ALB" & Stock == "ATS" ~ 1999,
-    Species == "BFT" & Stock == "ATE" ~ 1999,
-    Species == "ALB" & Stock == "ATN" ~ 2001,
-    Species == "BET" & Stock == "A+M" ~ 2005,
-    Species == "SBF" & Stock == "A+M" ~ 2007,
-    Species == "BUM" & Stock == "A+M" ~ 2013,
-    Species == "WHM" & Stock == "A+M" ~ 2013,
-    Species == "YFT" & Stock == "ATE" ~ 2013,
-    Species == "YFT" & Stock == "ATW" ~ 2013,
-    Species == "SWO" & Stock == "MED" ~ 2017,
-    Species == "BSH" & Stock == "ATN" ~ 2019,
-    Species == "BSH" & Stock == "ATS" ~ 2019)) %>%
+    SpeciesStock == "BFT.ATW" ~ 1982,
+    SpeciesStock == "SWO.ATN" ~ 1997,
+    SpeciesStock == "SWO.ATS" ~ 1998,
+    SpeciesStock == "ALB.ATS" ~ 1999,
+    SpeciesStock == "BFT.ATE" ~ 1999,
+    SpeciesStock == "ALB.ATN" ~ 2001,
+    SpeciesStock == "BET.A+M" ~ 2005,
+    SpeciesStock == "SBF.A+M" ~ 2007)) %>% 
+    #Species == "BUM" & Stock == "A+M" ~ 2013,
+    #Species == "WHM" & Stock == "A+M" ~ 2013,
+    #Species == "YFT" & Stock == "ATE" ~ 2013,
+    #Species == "YFT" & Stock == "ATW" ~ 2013,
+    #Species == "SWO" & Stock == "MED" ~ 2017,
+    #Species == "BSH" & Stock == "ATN" ~ 2019,
+    #Species == "BSH" & Stock == "ATS" ~ 2019)) %>%
   mutate(scaled_tacr = YearC-yearTACimp) %>% 
-    mutate(yearTACimp = ifelse(is.na(yearTACimp), 
-                                   Inf, yearTACimp),
-           tacr = 1 * (YearC >= yearTACimp)) %>%
+  mutate(yearTACimp = ifelse(is.na(yearTACimp), Inf, yearTACimp),
+           tacr = 1 * (YearC >= yearTACimp)) %>% 
   mutate(tacever = case_when(
-    Species == "BFT" & Stock == "ATW" ~ 1,
-    Species == "SWO" & Stock == "ATN" ~ 1,
-    Species == "SWO" & Stock == "ATS" ~ 1,
-    Species == "ALB" & Stock == "ATS" ~ 1,
-    Species == "BFT" & Stock == "ATE" ~ 1,
-    Species == "ALB" & Stock == "ATN" ~ 1,
-    Species == "BET" & Stock == "A+M" ~ 1,
-    Species == "SBF" & Stock == "A+M" ~ 1,
-    Species == "BUM" & Stock == "A+M" ~ 1,
-    Species == "WHM" & Stock == "A+M" ~ 1,
-    Species == "YFT" & Stock == "ATE" ~ 1,
-    Species == "YFT" & Stock == "ATW" ~ 1,
-    Species == "SWO" & Stock == "MED" ~ 1,
-    Species == "BSH" & Stock == "ATN" ~ 1,
-    Species == "BSH" & Stock == "ATS" ~ 1)) %>%
-    mutate(tacever = ifelse(is.na(tacever), 0, tacever))
+    SpeciesStock == "BFT.ATW" ~ 1,
+    SpeciesStock == "SWO.ATN" ~ 1,
+    SpeciesStock == "SWO.ATS" ~ 1,
+    SpeciesStock == "ALB.ATS" ~ 1,
+    SpeciesStock == "BFT.ATE" ~ 1,
+    SpeciesStock == "ALB.ATN" ~ 1,
+    SpeciesStock == "BET.A+M" ~ 1,
+    SpeciesStock == "SBF.A+M" ~ 1)) %>% 
+#    Species == "BUM" & Stock == "A+M" ~ 1,
+#    Species == "WHM" & Stock == "A+M" ~ 1,
+#    Species == "YFT" & Stock == "ATE" ~ 1,
+#    Species == "YFT" & Stock == "ATW" ~ 1,
+#    Species == "SWO" & Stock == "MED" ~ 1,
+#    Species == "BSH" & Stock == "ATN" ~ 1,
+#    Species == "BSH" & Stock == "ATS" ~ 1)) %>%
+    mutate(tacever = ifelse(is.na(tacever), 0, tacever)) %>% 
+  filter(YearC <= 2012)
+  
+iccat_df_main <- iccat %>%
+  mutate(yearTACimp = case_when(
+    SpeciesStock == "ALB.ATS" ~ 1999,
+    SpeciesStock == "ALB.ATN" ~ 2001,
+    SpeciesStock == "BET.A+M" ~ 2005)) %>%
+  mutate(scaled_tacr = YearC-yearTACimp) %>% 
+  mutate(yearTACimp = ifelse(is.na(yearTACimp), Inf, yearTACimp),
+           tacr = 1 * (YearC >= yearTACimp)) %>% 
+  mutate(tacever = case_when(
+    SpeciesStock == "ALB.ATS" ~ 1,
+    SpeciesStock == "ALB.ATN" ~ 1,
+    SpeciesStock == "BET.A+M" ~ 1)) %>%
+    mutate(tacever = ifelse(is.na(tacever), 0, tacever)) %>% 
+  filter(SpeciesStock != "BFT.ATW" & SpeciesStock != "SWO.ATN" & SpeciesStock != "SWO.ATS" & SpeciesStock != "BFT.ATE")
+
+iccat_df_cons <- iccat %>%
+  mutate(yearTACimp = case_when(
+    SpeciesStock == "BFT.ATW" ~ 1982,
+    SpeciesStock == "SWO.ATN" ~ 1997,
+    SpeciesStock == "SWO.ATS" ~ 1998,
+    SpeciesStock == "BFT.ATE" ~ 1999)) %>%
+  mutate(scaled_tacr = YearC-yearTACimp) %>% 
+  mutate(yearTACimp = ifelse(is.na(yearTACimp), Inf, yearTACimp),
+           tacr = 1 * (YearC >= yearTACimp)) %>% 
+  mutate(tacever = case_when(
+    SpeciesStock == "BFT.ATW" ~ 1,
+    SpeciesStock == "SWO.ATN" ~ 1,
+    SpeciesStock == "SWO.ATS" ~ 1,
+    SpeciesStock == "BFT.ATE" ~ 1)) %>%
+    mutate(tacever = ifelse(is.na(tacever), 0, tacever)) %>% 
+  filter(SpeciesStock != "ALB.ATS" & SpeciesStock != "ALB.ATN" & SpeciesStock != "BET.A+M")
 
 #write.csv(iccat_df, here("data", "iccat_df_unedited.csv"), row.names = F)
 
-
 ###Importing price data from NOAA for available species###
 #Cleaning price data from NOAA
-noaa.prices <- read.csv(here("data", "foss_landings.csv"),
-                  stringsAsFactors = F)
-noaa.prices$Dollars <- as.numeric(gsub(",","",noaa.prices$Dollars))
-noaa.prices$Pounds <- as.numeric(gsub(",","",noaa.prices$Pounds))
+#noaa.prices <- read.csv(here("data", "foss_landings.csv"),
+#                  stringsAsFactors = F)
+#noaa.prices$Dollars <- as.numeric(gsub(",","",noaa.prices$Dollars))
+#noaa.prices$Pounds <- as.numeric(gsub(",","",noaa.prices$Pounds))
 
-noaa.prices_edit <- noaa.prices %>% 
-  mutate(SpeciesID = case_when(
-    NMFS.Name == "TUNA, BLUEFIN" ~ "BFT",
-    NMFS.Name == "TUNA, SKIPJACK" ~ "SKJ",
-    NMFS.Name == "SHARK, MAKO, SHORTFIN" ~ "SMA",
-    NMFS.Name == "MARLIN, BLUE" ~ "BUM",
-    NMFS.Name == "TUNA, ALBACORE" ~ "ALB",
-    NMFS.Name == "TUNA, YELLOWFIN" ~ "YFT",
-    NMFS.Name == "SHARK, BLUE" ~ "BSH",
-    NMFS.Name == "TUNA, BIGEYE" ~ "BET",
-    NMFS.Name == "TUNA, BLACKFIN" ~ "BLF",
-    NMFS.Name == "TUNA, BLACKFIN" ~ "LTA")) %>% 
-  na.omit(SpeciesID) %>% 
-  filter(Region.Name!="Gulf") %>% 
-  group_by(Year,SpeciesID) %>% 
-  mutate(Kilogram = Pounds*0.453592) %>% 
-  mutate(USDperkilo = Kilogram/Dollars) %>% 
-  summarize(avUSDperkilo = mean(USDperkilo)) %>% 
-  filter(avUSDperkilo <= 80) %>% 
-  rename(YearC=Year) %>% 
-  rename(Species=SpeciesID)
+#noaa.prices_edit <- noaa.prices %>% 
+#  mutate(SpeciesID = case_when(
+#    NMFS.Name == "TUNA, BLUEFIN" ~ "BFT",
+#    NMFS.Name == "TUNA, SKIPJACK" ~ "SKJ",
+#    NMFS.Name == "SHARK, MAKO, SHORTFIN" ~ "SMA",
+#    NMFS.Name == "MARLIN, BLUE" ~ "BUM",
+#    NMFS.Name == "TUNA, ALBACORE" ~ "ALB",
+#    NMFS.Name == "TUNA, YELLOWFIN" ~ "YFT",
+#    NMFS.Name == "SHARK, BLUE" ~ "BSH",
+#    NMFS.Name == "TUNA, BIGEYE" ~ "BET",
+#    NMFS.Name == "TUNA, BLACKFIN" ~ "BLF",
+#    NMFS.Name == "TUNA, BLACKFIN" ~ "LTA")) %>% 
+#  na.omit(SpeciesID) %>% 
+#  filter(Region.Name!="Gulf") %>% 
+#  group_by(Year,SpeciesID) %>% 
+#  mutate(Kilogram = Pounds*0.453592) %>% 
+#  mutate(USDperkilo = Kilogram/Dollars) %>% 
+#  summarize(avUSDperkilo = mean(USDperkilo)) %>% 
+#  filter(avUSDperkilo <= 80) %>% 
+#  rename(YearC=Year) %>% 
+#  rename(Species=SpeciesID)
   
 #ggplot(noaa.prices_edit, aes(x=YearC, y=avUSDperkilo, color=Species)) +
 #  geom_line()
@@ -114,11 +146,11 @@ allfleets <- iccat_df %>%
   select(FleetGear)
 #isolating just the fleets that span from ~1970 to 2019
 longhaul <- iccat_df %>% 
-  filter(YearC >= 1970 & YearC <= 2019) %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>% 
   select(YearC, FleetGear,SpeciesStock) %>% 
   distinct(YearC, FleetGear) %>% 
   count(FleetGear) %>% 
-  filter(n>=45) %>% 
+  filter(n>=42) %>% 
   select(FleetGear)
 #isolating just the new entrants from ~1970 to 2019
 newentrants <- iccat_df %>% 
@@ -132,26 +164,33 @@ newentrants <- iccat_df %>%
 #Reporting requirements have become increasingly stringent over time.
 #In order to account for this, I am filtering for stocks that have been reported to ICCAT for at least 40 years (~1979 to 2019)
 longhaul.species <- iccat_df %>% 
-  filter(YearC >= 1970 & YearC <= 2019) %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>% 
   select(YearC, SpeciesStock) %>% 
   distinct(YearC, SpeciesStock) %>% 
   count(SpeciesStock) %>% 
-  filter(n>=40) %>% 
+  filter(n>=42) %>% 
   select(SpeciesStock)
 
-```
+#Variations in Contracting Parties
+#Isolating just the 'OG' CPs from 1970.
+longhaul.cps <- iccat_df %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>%
+  filter(PartyName=="UNITED STATES" | PartyName=="JAPAN" | PartyName=="SOUTH AFRICA" | PartyName=="GHANA" | PartyName=="CANADA"| PartyName=="FRANCE (St-Pierre et Miquelon)" | PartyName=="BRAZIL" | PartyName=="MAROC" | PartyName=="KOREA REP.") %>% 
+  distinct(PartyName)
 
+```
 
 ```{r cleaned dataset}
 
 #Creating a tac_any column, which shows in a given fleet year (grouped by FleetGear and YearC) if there are any stocks that are catch regulated (1 if at least one TAC-regulated stock is in the catch, 0 if none)
 iccat_df_final_edit <- iccat_df %>% 
   inner_join(allfleets, by="FleetGear") %>%
-  #inner_join(longhaul.species, by="SpeciesStock") %>% 
-  left_join(noaa.prices_edit, by = c("Species","YearC")) %>% 
+  inner_join(longhaul.species, by="SpeciesStock") %>% 
+  inner_join(longhaul.cps, by="PartyName") %>% 
+  #left_join(noaa.prices_edit, by = c("Species","YearC")) %>% 
   #filter(GearGrp=="LL") %>%  #Adding in an optional filter for gear type (LL=long line; PS=purse seine)
   group_by(YearC, FleetGear) %>% 
-  mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>% 
+  mutate(tac_any = case_when(any(tacr == 1) ~ 1, TRUE ~ 0)) %>%
   group_by(YearC, FleetGear) %>% 
   mutate(totalFleetCatch = sum(Qty_t)) %>%
   mutate(propStock = Qty_t/totalFleetCatch) %>% 
@@ -160,7 +199,9 @@ iccat_df_final_edit <- iccat_df %>%
   mutate(Qtydiff=Qty_t-lag(Qty_t,k=1)) #%>% 
   #na.omit(avUSDperkilo) #Adding an optional filter to isolate only species with NOAA price data
 
-write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = F)
+unique(iccat_df_final_edit$FleetGear)
+
+#write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = F)
 
 ```
 
@@ -169,6 +210,7 @@ write.csv(iccat_df_final_edit, here("data", "iccat_df_edited.csv"), row.names = 
 #Answer. The sign is positive, suggesting that the total catch of stocks that never receive a TAC increases within vessels that catch at least one TAC-managed stock. However, the difference is not statistically significant, suggesting that the change in total volumes caught is minimal.
 
 stockvolreg <- feols(Qty_t ~ tac_any | FleetGear + YearC^SpeciesStock, data = filter(iccat_df_final_edit, tacever==0))
+stockvolreg
 stockvolreg_coef_table <- stockvolreg$coeftable
 stockvolreg_coef_table
 
@@ -181,21 +223,76 @@ stockvolreg_coef_table
 #Answer. The difference is statistically significant and negative (-0.04), suggesting that the proportion of non-TAC stocks decreases within FleetGears that catch at least one TAC managed stock.
 
 stockreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacever==0), cluster="FleetGear")
+stockreg
 stockreg_coef_tab <- stockreg$coeftable
-stockreg_coef_tab 
+stockreg_coef_tab
 
 #Our hypothesis is that the proportion of non-TAC stocks would increase among vessels that catch at least one TAC-managed stock. This result is the opposite of what we expected.
 
 ```
 
-```{r analaysis by fleet}
-#Question. Does the proportion of the catch of non-TAC stocks in fleets that are catching one or more TAC stock increase or decrease relative to the catch of non-TAC stocks in fleets that do not catch any TAC stocks?
-#Answer. The treatment (being a fleet that catches one or more TAC stock) catch of non-TAC stocks in fleets that are catching one or more TAC stock increase 
 
-fleetreg <- feols(propStock ~ tac_any | YearC^SpeciesStock + FleetGear, data = filter(iccat_df_final_edit, tacr==0))
-fleetreg_coef_tab <- fleetreg$coeftable
-fleetreg_coef_tab
+```{r visuals of diff datasets}
 
+#Visual of change in gear types over time.
+fleetplot.other <- iccat_df %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>% 
+  group_by(GearGrp) %>% 
+  count(GearGrp) %>% 
+  filter(GearGrp != "LL" & GearGrp != "PS" & GearGrp != "UN") %>% 
+  group_by(YearC) %>% 
+  summarize(total=sum(n)) %>% 
+  rename(n=total) %>% 
+  add_column(GearGrp = "OTH")
+fleetplot.major <- iccat_df %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>% 
+  group_by(YearC, GearGrp) %>% 
+  count(GearGrp) %>% 
+  filter(GearGrp == "LL" | GearGrp == "PS" | GearGrp == "UN")
+
+fleetplot <- bind_rows(fleetplot.major,fleetplot.other)
+
+ggplot(fleetplot, aes(fill=GearGrp, y=n, x=YearC)) + 
+  theme_bw() +
+  geom_bar(position="stack", stat="identity") +
+  xlab("Year") +
+  ylab("Number of Gear Groups") +
+  scale_fill_manual(name = "Gear Group", labels = c("Longline", "Other", "Purse Seine", "Unknown"), values = c("#7fc97f","#beaed4", "#fdc086","#ffff99"))
+  
+#ggsave(plot = last_plot(), filename = here("visuals", "geargrps_summary.jpg"), width = 5, height = 3)
+
+#Visual of changes in catch of new entrants and long haul fleets.
+
+iccat_vis_longhaul <- iccat_df %>% 
+  inner_join(longhaul, by="FleetGear") %>%
+  inner_join(longhaul.species, by="SpeciesStock") %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>%
+  group_by(YearC,tacever) %>% 
+  summarize(sum_Qty = sum(Qty_t))
+iccat_vis_longhaul$tacever <- as.character(iccat_vis_longhaul$tacever)
+
+iccat_vis_newent <- iccat_df %>% 
+  inner_join(newentrants, by="FleetGear") %>%
+  inner_join(longhaul.species, by="SpeciesStock") %>% 
+  filter(YearC >= 1970 & YearC <= 2012) %>%
+  group_by(YearC,tacever) %>% 
+  summarize(sum_Qty = sum(Qty_t))
+iccat_vis_newent$tacever <- as.character(iccat_vis_newent$tacever)
+
+ggplot() + 
+  theme_bw() +
+  geom_line(data=iccat_vis_longhaul, aes(x=YearC, y=sum_Qty, group=tacever, color=tacever)) +
+  geom_line(data=iccat_vis_newent, aes(x=YearC, y=sum_Qty, group=tacever, color=tacever), linetype = 2) +
+  scale_colour_manual(name = "Treatment Group", labels = c("Control (non-TAC)", "Treated (TAC)"), values=c("#424953", "#ff688c")) +
+  xlab("Year") +
+  ylab("Total Catch Volume (tonnes)") +
+  theme(legend.position =  "bottom") +
+  annotate("text", x = 2000, y = 3.5e+05, label = "New Entrants", fontface="italic", size=2) +
+  annotate("text", x = 2000, y = 0.4e+05, label = "New Entrants", fontface="italic", color="#ff688c", size=2) +
+  annotate("text", x = 2001, y = 2.15e+05, label = "Long-haulers", fontface="italic", size=2) +
+  annotate("text", x = 2001, y = 1.5e+05, label = "Long-haulers", fontface="italic", color="#ff688c", size=2)
+
+#ggsave(plot = last_plot(), filename = here("visuals", "newold_catch_summary.jpg"), width = 5, height = 3)
 ```
 
 ```{r analysis older code}

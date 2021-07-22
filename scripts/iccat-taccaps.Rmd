@@ -17,14 +17,12 @@ here()
 
 iccat_df <- read.csv(here("data", "iccat_df_edited.csv"),
                   stringsAsFactors = F) %>% 
-  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) %>% 
-  filter(SpeciesStock =="SBF.A+M") %>% 
-  rename(Year=YearC)
+  unite(SpeciesStock, c(Species,Stock), sep=".", remove=FALSE) 
 
 ccsbt_data <- read.csv(here("data", "CCSBT_totalSBT.csv"),
                   stringsAsFactors = F) %>% 
   rename(totProd=Catch) %>% 
-  mutate(scaled_tacr = Year-2006) %>% 
+  mutate(scaled_tacr = Year-2007) %>% 
   add_column(SpeciesStock="SBF")
 
 eastern.med.bft <- iccat_df %>% 
@@ -34,9 +32,6 @@ eastern.med.bft <- iccat_df %>%
   add_column(SpeciesStock="BFT.AE+M") %>% 
   mutate(scaled_tacr = YearC-1999) %>% 
   rename(Year=YearC)
-  
-combo.sbf <- ccsbt_data %>% 
-  left_join(iccat_df,by=Year)
 
 ```
 
@@ -53,7 +48,7 @@ scrsad <- read.csv(here("data", "scrsadvice.csv"),
 
 iccat.reduced <- iccat_df %>% 
   filter(tacever=="1") %>% 
-  filter(SpeciesStock != "BSH.ATN" & SpeciesStock != "BSH.ATS"& SpeciesStock != "YFT.ATE"& SpeciesStock != "YFT.ATW"& SpeciesStock != "SWO.MED"& SpeciesStock != "WHM.A+M"& SpeciesStock != "BUM.A+M") %>% 
+  filter(SpeciesStock != "BSH.ATN" & SpeciesStock != "BSH.ATS"& SpeciesStock != "YFT.ATE"& SpeciesStock != "YFT.ATW"& SpeciesStock != "SWO.MED"& SpeciesStock != "WHM.A+M"& SpeciesStock != "BUM.A+M" & SpeciesStock != "SBF.A+M") %>% 
   select(YearC, Qty_t, SpeciesStock, scaled_tacr) %>% 
   rename(Year=YearC) %>% 
   group_by(Year, scaled_tacr, SpeciesStock) %>% 
@@ -116,9 +111,9 @@ taccapsplot.grp3 <- ggplot(data=iccat.combo.grp3) +
 taccapsplot.grp3
 
 #Breaking into two groups according to constraining/maintaining 
-#Constraining Group [Group 1 - BFT.ATW, SWO.ATN, BFT.AE+M, SBT]
+#Constraining Group [Group 1 - BFT.ATW, SWO.ATN, SWO.ATS, BFT.AE+M, SBT]
 iccat.combo.grp1b <- iccat.combo %>% 
-  filter(SpeciesStock=="SWO.ATN" | SpeciesStock=="BFT.ATW" | SpeciesStock=="BFT.AE+M" )
+  filter(SpeciesStock=="SWO.ATN" | SpeciesStock=="SWO.ATS" |SpeciesStock=="BFT.ATW" | SpeciesStock=="BFT.AE+M" | SpeciesStock=="SBF")
 
 taccapsplot.grp1b <- ggplot(data=iccat.combo.grp1b) +
   theme_bw() +
@@ -132,25 +127,9 @@ taccapsplot.grp1b
 
 ggsave(plot = last_plot(), filename = here("visuals/constraining.png"), width = 6, height = 4)
 
-#Middle of the road group [Group 2 - SWO.ATS, ALB.ATN]
-iccat.combo.grp2b <- iccat.combo %>% 
-  filter(SpeciesStock=="ALB.ATN"| SpeciesStock=="SWO.ATS")
-
-taccapsplot.grp2b <- ggplot(data=iccat.combo.grp2b) +
-  theme_bw() +
-  geom_line(aes(x=Year, y=totProd, color=SpeciesStock)) +
-  geom_point(aes(x=Year, y=tac_cap, color=SpeciesStock), shape="-", size=8) +
-  geom_point(aes(x=Year, y=scrs_value, color=SpeciesStock), shape=2) +
-  theme(legend.title = element_blank(), legend.position = "bottom") +
-  xlab("") + ylab("") +
-  xlim(1997,2012)
-taccapsplot.grp2b
-
-ggsave(plot = last_plot(), filename = here("visuals/ambig.png"), width = 6, height = 4)
-
-#Maintaining Group [Group 3 - ALB.ATS, BET.A+M]
+#Maintaining Group [Group 2 - ALB.ATS, ALB.ATN, BET.A+M]
 iccat.combo.grp3b <- iccat.combo %>% 
-  filter(SpeciesStock=="ALB.ATS" | SpeciesStock=="BET.A+M")
+  filter(SpeciesStock=="ALB.ATS" | SpeciesStock=="ALB.ATN" |SpeciesStock=="BET.A+M")
 
 taccapsplot.grp3b <- ggplot(data=iccat.combo.grp3b) +
   theme_bw() +
@@ -173,8 +152,6 @@ annotate_figure(taccaps, bottom = "Year", left = "ICCAT Reported Catch (mt)")
 
 ggsave(plot = last_plot(), filename = here("visuals/taccaps_scrsadv.png"), width = 10, height = 4)
 
-
-
 ```
 
 ```{r kobe plot for different tacs}
@@ -185,14 +162,23 @@ health$Group <- as.character(health$Group)
 #Pre-TAC comparing SCRS understanding at the time with Ram Legacy data
 health_pre <- health %>% 
   filter(TimePeriod=="0")
-healthindi_pre <- ggplot(data=health_pre,aes(x=BvBmsy, y=FvFmsy, color=SpeciesStock, shape=Dataset)) +
+healthindi_pre <- ggplot(data=health_pre,aes(x=BvBmsy, y=FvFmsy, color=Group, shape=Dataset)) +
   theme_bw() +
-  geom_point(size = 5) +
+  geom_point(size = 3) +
   geom_vline(xintercept = 1,linetype = "longdash", colour="darkgrey") +
   geom_hline(yintercept = 1,linetype = "longdash", colour="darkgrey") +
-  geom_text(aes(label=SpeciesStock), nudge_x = 0.04, nudge_y = -0.05, size=3) +
-  xlab("B/BMSY") + ylab("F/FMSY")
+  geom_vline(xintercept = 1.05,linetype = "longdash", colour="darkgrey") +
+  geom_vline(xintercept = 0.95,linetype = "longdash", colour="darkgrey") +
+  geom_text(aes(label=SpeciesStock), nudge_x = 0.04, nudge_y = -0.05, size=2.5) +
+  xlab("B/BMSY") + ylab("F/FMSY") +
+  scale_color_manual(values = c("#d01c8b", "#e885c1", "#7fda5a", "#4dac26"),
+                     labels = c("Constraining", "Leans Constraining", "Leans Maintaining", "Maintaining")) +
+  scale_shape_manual(values = c(16,17), 
+                     labels = c("Ram Legacy Database", "ICCAT SCRS Report")) +
+  theme(legend.text = element_text(size=8), legend.title = element_text(size=8))
 healthindi_pre
+
+ggsave(plot = last_plot(), filename = here("visuals/health_bothdata.png"), width = 8, height = 4)
 
 #Just SCRS estimates, and Ram estimates for BFT.ATW, SBT, and BFT.AE+M
 health_pre2 <- health %>% 
@@ -200,7 +186,7 @@ health_pre2 <- health %>%
   filter(Dataset=="Scrs")
 no_scrs_est <- health %>% 
   filter(TimePeriod=="0") %>% 
-  filter(SpeciesStock=="BFT.ATW" | SpeciesStock=="SBT" | SpeciesStock=="BFT.AE+M")
+  filter(SpeciesStock=="BFT.ATW" | SpeciesStock=="SBF" | SpeciesStock=="BFT.AE+M")
 sci_advice_pre <- bind_rows(health_pre2, no_scrs_est)
 
 healthindi_pre2 <- ggplot(data=sci_advice_pre,aes(x=BvBmsy, y=FvFmsy, color=Group)) +
@@ -208,15 +194,16 @@ healthindi_pre2 <- ggplot(data=sci_advice_pre,aes(x=BvBmsy, y=FvFmsy, color=Grou
   geom_point(size = 4) +
   geom_vline(xintercept = 1,linetype = "longdash", colour="darkgrey") +
   geom_hline(yintercept = 1,linetype = "longdash", colour="darkgrey") +
-  geom_hline(yintercept = 1.2,linetype = "longdash", colour="darkgrey") +
-  geom_hline(yintercept = 0.8,linetype = "longdash", colour="darkgrey") +
+  geom_vline(xintercept = 1.05,linetype = "longdash", colour="darkgrey") +
+  geom_vline(xintercept = 0.95,linetype = "longdash", colour="darkgrey") +
   geom_text(aes(label=SpeciesStock), nudge_x = 0.05, nudge_y = -0.09, size=3) +
   xlab("B/BMSY") + ylab("F/FMSY") +
-  scale_color_manual(values = c("#f03b20", "#feb24c", "#2ca25f"),
-                     labels = c("Constraining", "Ambiguous", "Maintaining")) +
-  theme(legend.title = element_blank(), legend.position = "bottom") 
+  scale_color_manual(values = c("#d01c8b", "#e885c1", "#8ace37", "#4dac26"),
+                     labels = c("Constraining", "Leans Constraining", "Leans Maintaining", "Maintaining")) +
+  theme(legend.title = element_blank(), legend.position = "bottom") #+
+  #annotate("text", x=1.2, y=1.3, label= "Maximally Sustainably Exploited (FAO)",color="dark grey",size=3)
 
 healthindi_pre2
 
-ggsave(plot = last_plot(), filename = here("visuals/health_scrs.png"), width = 6, height = 4)
+#ggsave(plot = last_plot(), filename = here("visuals/health_scrs.png"), width = 6, height = 4)
 ```
